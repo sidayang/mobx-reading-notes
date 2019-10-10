@@ -32,7 +32,7 @@ const demoStoreInstance1 = New(DemoStore);
 console.log(demoStoreInstance1 instanceof DemoStore); // result: true
 ```
 
-What does `new` do is shown in `New` function, an instance of DemoStore `instance` is created and `this.observedArray = ["foo", "bar", "hoo", "hee"];` in [index.js#9](./index.js#9) is exactly `instance.observedArray = ["foo", "bar", "hoo", "hee"];`, where the property descripter [index.js#9](./index.js#9) get called.
+What does `new` do is shown in `New` function, an instance of DemoStore `instance` is created and `this.observedArray = ["foo", "bar", "hoo", "hee"];` in [index.js#L9](./index.js#L9) is exactly `instance.observedArray = ["foo", "bar", "hoo", "hee"];`, where the property descripter [index.js#L1](./index.js#L1) get called.
 
 [src/utils/decorators.ts#L32](https://github.com/mobxjs/mobx/blob/5.13.0/src/utils/decorators.ts#L32)
 
