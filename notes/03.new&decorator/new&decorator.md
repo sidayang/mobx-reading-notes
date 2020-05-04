@@ -1,6 +1,6 @@
 # Mobx Source Code Reading Note 3
 
-## new
+## new & decorator
 
 ### Notice
 
@@ -32,7 +32,11 @@ const demoStoreInstance1 = New(DemoStore);
 console.log(demoStoreInstance1 instanceof DemoStore); // result: true
 ```
 
-What does `new` do is shown in `New` function, an instance of DemoStore `instance` is created and `this.observedArray = ["foo", "bar", "hoo", "hee"];` in [index.js#L9](./index.js#L9) is exactly `instance.observedArray = ["foo", "bar", "hoo", "hee"];`, where the property descripter [index.js#L1](./index.js#L1) get called.
+When we declare `class DemoStore`, `property descriptor` of `observedArray` property in `DemoStore.prototype` is defined. [index.js#L12](./index.js#L12).
+Then when we `new` a instance of `DemoStore`, we [create](./index.js#L22) a `instance` and the `fn` in `fn.apply()` is the `function DemoStore` in [index.js#L9](./index.js#L9).
+So basically, `instance.observedArray = ["foo", "bar", "hoo", "hee"];` executed, which means the property descriptor of `observedArray` in `DemoStore.prototype` gets called.
+
+Below is what this property descripor is
 
 [src/utils/decorators.ts#L32](https://github.com/mobxjs/mobx/blob/5.13.0/src/utils/decorators.ts#L32)
 
@@ -56,11 +60,17 @@ function createPropertyInitializerDescriptor(
       set(value) {
         initializeInstance(this);
         this[prop] = value;
-      }
+      },
     })
   );
 }
 ```
+
+when we `New(DemoStore)`, initial value would be assigned to `instance.observedArray` (index.js#L10)[./index.js#L10], `set` above would get called.
+
+`this` in `initializeInstance(this)` would be the `instance` (index.js#L22)[./index.js#L22], `demoStoreInstance` (index.js#L17)[./index.js#L17] or `demoStoreInstance1` (index.js#L26)[./index.js#L26], which are the same in this context.
+
+`demoStoreInstance` would be referred to below .
 
 [src/utils/decorators.ts#L55](https://github.com/mobxjs/mobx/blob/5.13.0/src/utils/decorators.ts#L55)
 
@@ -89,7 +99,7 @@ arguments passed to `propertyCreator` function as follow:
 1. `target` is `demoStoreInstance`
 2. `prop` is `"observedArray"`
 3. `descriptor` is `undefined`
-4. `decoratorTarget` is `DemoStore.protoType`
+4. `decoratorTarget` is `DemoStore.prototype`
 5. `decoratorArguments` is `[]`
 
 and `propertyCreator` is
@@ -147,7 +157,7 @@ export function asObservableObject(
 }
 ```
 
-create a singleton instance under `$mobx` property of constructor of `DemoStore` class
+create an instance of `ObservableObjectAdministration` under `$mobx` property of `demoStoreInstance`
 
 [src/types/observableobject.ts#L160](https://github.com/mobxjs/mobx/blob/5.13.0/src/types/observableobject.ts#L160)
 
@@ -185,7 +195,7 @@ export class ObservableObjectAdministration
         object: this.proxy || target,
         name: propName,
         type: "add",
-        newValue
+        newValue,
       });
       if (!change) return;
       newValue = (change as any).newValue;
@@ -209,6 +219,8 @@ export class ObservableObjectAdministration
 }
 ```
 
+`ObservableValue` applys `enhancer` to `newValue`, creating a `Observable`, which is the same with that in Note 1.
+
 [src/types/observableobject.ts#L357](https://github.com/mobxjs/mobx/blob/5.13.0/src/types/observableobject.ts#L357)
 
 ```ts
@@ -223,11 +235,13 @@ export function generateObservablePropConfig(propName) {
       },
       set(v) {
         this[$mobx].write(propName, v);
-      }
+      },
     })
   );
 }
 ```
+
+So far, both the get and set action done to `observedArray` would be handled by `demoStoreInstance[$mobx]`
 
 [src/types/observableobject.ts#L93](https://github.com/mobxjs/mobx/blob/5.13.0/src/types/observableobject.ts#L93)
 
@@ -297,3 +311,36 @@ export class ObservableObjectAdministration
         }
     }
 ```
+
+<!--
+When get read, the value under `demoStoreInstance[$mobx].values` would be returned, and when get set, observers would be notified by calling `notifyListener(this, change)`
+
+here `this` is `demoStoreInstance[$mobx]`
+and `change` is a object that contains new value
+
+```ts
+{
+  type: "update",
+  object: this.proxy || instance,
+  oldValue: (observable as any).value,
+  name: key,
+  newValue,
+}
+```
+
+[src/types/listen-utils.ts#L21](https://github.com/mobxjs/mobx/blob/5.13.0/src/types/listen-utils.ts#L21)
+
+```ts
+export function notifyListeners<T>(listenable: IListenable, change: T) {
+  const prevU = untrackedStart();
+  let listeners = listenable.changeListeners;
+  if (!listeners) return;
+  listeners = listeners.slice();
+  for (let i = 0, l = listeners.length; i < l; i++) {
+    listeners[i](change);
+  }
+  untrackedEnd(prevU);
+}
+```
+
+So far we haven't set any listener for `demoStoreInstance.observedArray`, but it looks like they will be in `listenable.changeListeners` which is `demoStoreInstance[$mobx].changeListeners` -->
